@@ -1,0 +1,66 @@
+name: Build Snake Game
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:   # cho phép chạy thủ công bằng 1 click
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      # 1. Lấy source code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Cài SFML 3 qua vcpkg
+      - name: Install SFML via vcpkg
+        run: vcpkg install sfml:x64-windows
+        shell: cmd
+
+      # 3. Build bằng CMake
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . `
+            -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake `
+            -DCMAKE_BUILD_TYPE=Release
+        shell: pwsh
+
+      - name: Build
+        run: cmake --build build --config Release
+        shell: pwsh
+
+      # 4. Copy arial.ttf vào cùng thư mục với .exe
+      - name: Copy font
+        run: |
+          copy "C:\Windows\Fonts\arial.ttf" "build\Release\arial.ttf"
+        shell: cmd
+
+      # 5. Copy các SFML .dll cần thiết
+      - name: Copy SFML DLLs
+        run: |
+          copy "C:\vcpkg\installed\x64-windows\bin\sfml-graphics-3.dll"  "build\Release\"
+          copy "C:\vcpkg\installed\x64-windows\bin\sfml-window-3.dll"    "build\Release\"
+          copy "C:\vcpkg\installed\x64-windows\bin\sfml-system-3.dll"    "build\Release\"
+          copy "C:\vcpkg\installed\x64-windows\bin\freetype.dll"         "build\Release\"
+        shell: cmd
+        continue-on-error: true
+
+      # 6. Đóng gói toàn bộ thành file .zip để tải về
+      - name: Package release
+        run: |
+          mkdir SnakeGame
+          copy build\Release\SnakeGame.exe SnakeGame\
+          copy build\Release\arial.ttf     SnakeGame\
+          xcopy /s /i build\Release\*.dll  SnakeGame\
+          Compress-Archive -Path SnakeGame -DestinationPath SnakeGame-Windows.zip
+        shell: pwsh
+
+      # 7. Upload artifact — tải về từ tab Actions
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SnakeGame-Windows
+          path: SnakeGame-Windows.zip
+          retention-days: 30
